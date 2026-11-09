@@ -1,92 +1,107 @@
-# PostgreSQL Backup, Point-in-Time Recovery, and Replication Lab
+# PostgreSQL Audit Logging, Category Trees, and Safe Migrations
 
 **PLP Software Engineering Training**
 
-## Project Overview
+## Project overview
 
-This project demonstrates PostgreSQL database backup, Write-Ahead Logging (WAL) archiving, Point-in-Time Recovery (PITR), and streaming replication.
+This lab demonstrates trigger-based audit logging, hierarchical category data,
+versioned schema migrations with Flyway, and least-privilege database roles.
 
-## Technologies Used
+**Database:** PostgreSQL 16  
+**Migration tool:** Flyway  
+**Environment:** Linux / GitHub Codespaces
 
-- PostgreSQL 16
-- SQL
-- Linux / Ubuntu
-- GitHub Codespaces
-- GitHub
+## Lab tasks
 
-## Tasks Completed
+1. Create a reusable JSONB audit log and attach a trigger to `students`.
+2. Verify that inserts, updates, and deletes are recorded.
+3. Model categories with a self-referencing `parent_id` and query the hierarchy
+   using a recursive CTE.
+4. Organize schema changes into ordered Flyway migrations.
+5. Create read/write roles and grant only the permissions they need.
 
-### 1. Logical Backup and Verification
+## Repository structure
 
-- Created a logical backup of the `bootcamp` database using `pg_dump`.
-- Verified the backup using `pg_restore --list`.
-- Restored the backup into a separate test database.
-
-### 2. WAL Archiving and Base Backup
-
-- Configured `wal_level = replica`.
-- Enabled WAL archiving.
-- Created a WAL archive directory.
-- Created a physical base backup.
-- Verified the base backup using `pg_verifybackup`.
-
-### 3. Point-in-Time Recovery (PITR)
-
-- Created a separate recovery directory from the base backup.
-- Configured recovery using `recovery.signal`.
-- Set the recovery target time to:
-
-`2026-11-06 12:30:00 UTC`
-
-- Started PostgreSQL on a separate port.
-- Verified the recovery status.
-
-### 4. Streaming Replication
-
-- Created a replication role named `replicator`.
-- Configured replication access in `pg_hba.conf`.
-- Created a standby server using `pg_basebackup`.
-- Confirmed that the standby connected to the primary server.
-
-### 5. Replication Health Monitoring
-
-- Checked the WAL receiver status.
-- Verified streaming replication.
-- Inserted a test record on the primary database.
-- Confirmed that the record appeared on the standby database.
-
-## Verification Evidence
-
-The following PostgreSQL checks were successful:
-
-```sql
-SELECT pg_is_in_recovery();
+```text
+.
+├── README.md
+├── migrations/
+│   ├── V1__core_tables.sql
+│   ├── V2__audit_log.sql
+│   ├── V3__categories.sql
+│   └── V4__least_privilege_roles.sql
+└── verification/
+    ├── audit_test.sql
+    ├── category_tree_test.sql
+    └── security_checks.sql
 ```
 
-Result: `t`
+## Before running
 
-```sql
-SELECT pg_is_wal_replay_paused(), pg_is_in_recovery();
+- Connect to the intended `bootcamp` database.
+- Take a backup before applying schema changes.
+- Check that the `students` table exists and has an `id` column.
+- Do not commit real passwords or database credentials.
+- The audit test uses a clearly marked test row and removes it after recording
+  the test events. Review the SQL before running it.
+- Flyway migrations are versioned and should not be edited after they have
+  been applied. Create a new migration for later changes.
+
+## Apply migrations
+
+From the repository root, configure Flyway for your environment, then run:
+
+```bash
+flyway -url="jdbc:postgresql://localhost:5433/bootcamp" \
+  -user="codespace" migrate
+
+flyway -url="jdbc:postgresql://localhost:5433/bootcamp" \
+  -user="codespace" info
 ```
 
-Result: `t | t`
+Adjust host, port, and username to match your PostgreSQL connection. Ensure the
+Flyway PostgreSQL driver is available to your Flyway installation.
 
-These results confirmed that the PITR recovery server was in recovery mode and WAL replay was paused at the configured recovery boundary.
+## Verify
 
-## Screenshot Evidence
+Run the SQL files in `verification/` using `psql`:
 
-See the uploaded screenshot:
+```bash
+psql -h "$HOME" -p 5433 -U codespace -d bootcamp \
+  -f verification/audit_test.sql
 
-`postgresql-pitr-success.png`
+psql -h "$HOME" -p 5433 -U codespace -d bootcamp \
+  -f verification/category_tree_test.sql
+
+psql -h "$HOME" -p 5433 -U codespace -d bootcamp \
+  -f verification/security_checks.sql
+```
+
+## Security note
+
+The migration creates the `api` login role without embedding a password in
+source control. Set its password interactively on the database:
+
+```sql
+\password api
+```
+
+Use a unique secret and do not place it in this repository.
+
+## Evidence to add before submission
+
+After running the lab, add screenshots or copied terminal output showing:
+
+- audit rows for INSERT, UPDATE, and DELETE;
+- the recursive category tree output;
+- successful `flyway migrate` and `flyway info`;
+- role memberships and grants.
+
+Do not describe a step as completed until its command has run successfully and
+the result has been checked.
 
 ## Conclusion
 
-Successfully completed the PostgreSQL backup and recovery lab.
-
-The exercise demonstrated logical backups, physical base backups, WAL archiving, point-in-time recovery, streaming replication, and replication monitoring.
-
-These techniques help protect databases against accidental data loss and support database availability.
-
-## GitHub Repository
-
-https://github.com/peterochihaiomiyang-sudo/plp-postgresql-backup-recover
+This project provides a repeatable structure for recording data changes,
+querying hierarchical data, managing schema evolution, and limiting database
+permissions.
